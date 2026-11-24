@@ -1,0 +1,49 @@
+{
+	"name": "l402-bridge",
+	"version": "0.1.0",
+	"description": "Let any OpenAI-compatible tool pay for its own inference in sats: a local proxy that answers L402 challenges from any Nostr Wallet Connect wallet.",
+	"type": "module",
+	"license": "MIT",
+	"bin": {
+		"l402-bridge": "bin/l402-bridge.js"
+	},
+	"files": [
+		"bin",
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"test": "node --test 'test/**/*.test.js'",
+		"check": "tsc -p jsconfig.json"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/lamporun/l402-bridge.git"
+	},
+	"keywords": [
+		"l402",
+		"lightning",
+		"bitcoin",
+		"nwc",
+		"openai",
+		"llm",
+		"agents",
+		"openclaw"
+	],
+	"dependencies": {
+		"@getalby/sdk": "9.0.0",
+		"@lightninglabs/aperture-client": "0.0.2",
+		"light-bolt11-decoder": "3.2.0"
+	},
+	"devDependencies": {
+		"@types/node": "26.6.6",
+		"bolt11": "1.4.2",
+		"nostr-tools": "2.26.1",
+		"openai": "7.63.0",
+		"typescript": "7.0.2"
+	}
+}
