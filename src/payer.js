@@ -84,10 +84,10 @@ function describe(err) {
 			case "INSUFFICIENT_BALANCE":
 				return "the wallet does not have enough sats";
 			case "QUOTA_EXCEEDED":
-				return "the wallet connection's budget is used up (raise it in your wallet's app connection settings)";
+				return `the wallet connection's limit was reached (${clip(err.message)})`;
 			case "RESTRICTED":
 			case "UNAUTHORIZED":
-				return "the wallet connection is not allowed to pay invoices";
+				return `the wallet connection refused the payment (${clip(err.message)})`;
 			case "PAYMENT_FAILED":
 				return `the wallet could not route the payment to the seller (${clip(err.message)})`;
 			default:

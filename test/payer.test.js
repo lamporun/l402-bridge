@@ -115,3 +115,19 @@ test("a wallet's long routing error is shortened for the user", async () => {
 	assert.equal(ledger.payments.length, 0);
 	assert.equal(guard.pausedUntil, 0, "a definite failure does not pause payments");
 });
+
+test("a wallet's own refusal reason reaches the user", async () => {
+	const { guard, ledger, hash } = fixture();
+	const { Nip47WalletError } = await import("@getalby/sdk/nwc");
+	const guarded = {
+		payInvoice: async () => {
+			throw new Nip47WalletError("nwc-guard: 3000 sats is above the limit of 1000 per payment", "QUOTA_EXCEEDED");
+		},
+		lookupInvoice: async () => ({}),
+	};
+	const payer = new NwcPayer({ client: guarded, guard, ledger });
+	await assert.rejects(
+		payer.payInvoice({ invoice: invoiceFor(1_000, hash), amountSat: 1_000, challengeId: "c" }),
+		(err) => err instanceof WalletError && /limit was reached \(nwc-guard: 3000 sats is above the limit/.test(err.message),
+	);
+});
