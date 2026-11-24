@@ -145,6 +145,21 @@ curl http://127.0.0.1:8402/v1/chat/completions -H 'content-type: application/jso
 - **What is stored:** paid tokens (`tokens.json`) and the payment log (`payments.ndjson`, with each payment's hash and preimage as proof of payment), both readable by you only. Prompts and responses are never logged or stored.
 - Each model has its own bundle, bought on its first request and bought again when the seller reports it used up. A bundle bought once survives restarts.
 
+## Tested on mainnet
+
+On 2026-11-24 the bridge was run against https://lampo.run with a real NWC wallet service over `wss://relay.getalby.com/v1`, driven by the openai SDK:
+
+| Step | Result |
+|---|---|
+| `GET /v1/models` | 8 models, free |
+| Streamed DeepSeek V4 Flash completion | one 1,000-sat payment, answer in 13.8 s including the payment |
+| Second DeepSeek request | the bundle was reused, nothing paid, 1.0 s |
+| Three GLM 5.3 Flash requests at once | one 1,000-sat payment for all three |
+| Kimi K3 (3,000-sat bundle) | refused by the 1,000-sat per-payment limit, nothing paid |
+| `/l402/status` | both bundles, with what the seller reports is left |
+
+Whether a wallet can pay a seller depends on Lightning routing between them. If the wallet finds no route, the bridge passes its error on in one line and nothing is paid.
+
 ## Development
 
 ```sh
