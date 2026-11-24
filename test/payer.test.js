@@ -97,3 +97,21 @@ test("the ledger survives a restart and a torn last line", async () => {
 	assert.equal(second.spentSince(0), 1_001);
 	assert.equal(/** @type {any} */ (second.recent(5)[0]).preimageHex, undefined);
 });
+
+test("a wallet's long routing error is shortened for the user", async () => {
+	const { guard, ledger, hash } = fixture();
+	const { Nip47WalletError } = await import("@getalby/sdk/nwc");
+	const noisy = {
+		payInvoice: async () => {
+			throw new Nip47WalletError(`Failed after 36 attempts. ${"We got temporary_channel_failure. ".repeat(40)}`, "PAYMENT_FAILED");
+		},
+		lookupInvoice: async () => ({}),
+	};
+	const payer = new NwcPayer({ client: noisy, guard, ledger });
+	await assert.rejects(
+		payer.payInvoice({ invoice: invoiceFor(1_000, hash), amountSat: 1_000, challengeId: "c" }),
+		(err) => err instanceof WalletError && err.message.startsWith("the wallet could not route the payment") && err.message.length < 320,
+	);
+	assert.equal(ledger.payments.length, 0);
+	assert.equal(guard.pausedUntil, 0, "a definite failure does not pause payments");
+});

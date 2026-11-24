@@ -59,6 +59,20 @@ function isDefiniteFailure(err) {
 	return err instanceof Nip47WalletError && DEFINITE_FAILURES.has(err.code);
 }
 
+// MAX_DETAIL is how much of a wallet's own error text is passed on. Some
+// wallets return the whole pathfinding log, which no tool shows well.
+const MAX_DETAIL = 240;
+
+/**
+ * clip shortens a wallet's error text for the user.
+ *
+ * @param {string} text
+ */
+function clip(text) {
+	const flat = text.replace(/\s+/g, " ").trim();
+	return flat.length > MAX_DETAIL ? `${flat.slice(0, MAX_DETAIL)}…` : flat;
+}
+
 /**
  * describe turns a wallet error into a short message for the user.
  *
@@ -74,11 +88,13 @@ function describe(err) {
 			case "RESTRICTED":
 			case "UNAUTHORIZED":
 				return "the wallet connection is not allowed to pay invoices";
+			case "PAYMENT_FAILED":
+				return `the wallet could not route the payment to the seller (${clip(err.message)})`;
 			default:
-				return `the wallet refused the payment (${err.code}: ${err.message})`;
+				return `the wallet refused the payment (${err.code}: ${clip(err.message)})`;
 		}
 	}
-	return err instanceof Error ? err.message : String(err);
+	return clip(err instanceof Error ? err.message : String(err));
 }
 
 /**
