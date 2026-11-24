@@ -147,7 +147,7 @@ curl http://127.0.0.1:8402/v1/chat/completions -H 'content-type: application/jso
 
 ## Tested on mainnet
 
-On 2026-11-24 the bridge was run against https://lampo.run with a real NWC wallet service over `wss://relay.getalby.com/v1`, driven by the openai SDK:
+On 2026-11-24 the bridge was run against https://lampo.run with real sats, driven by the openai SDK. With [Minibits](https://www.minibits.cash/) as the wallet, a streamed DeepSeek V4 Flash completion bought a 1,000-sat bundle and answered in 13.8 s including the payment, and the next request reused the bundle in 0.8 s. A longer run used a Wavelength wallet behind an NWC service over `wss://relay.getalby.com/v1`:
 
 | Step | Result |
 |---|---|
