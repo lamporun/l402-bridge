@@ -38,7 +38,7 @@ npx github:lamporun/l402-bridge
   status     http://127.0.0.1:8402/l402/status
 ```
 
-**3. Point your tool at `http://127.0.0.1:8402/v1`** with any API key and a model the seller sells (see `GET /v1/models`). The first request buys a bundle for that model, for example 1,000 sats for about 2.8M DeepSeek V4 Flash tokens on lampo.run, and later requests use it until it runs out:
+**3. Point your tool at `http://127.0.0.1:8402/v1`** with any API key and a model the seller sells (see `GET /v1/models`). The first request buys a bundle for that model, for example 1,000 sats for about 2.5M DeepSeek V4 Flash tokens on lampo.run, and later requests use it until it runs out:
 
 ```
 ⚡ paid 1,000 sats + 1 fee · new bundle for deepseek-ai/DeepSeek-V4-Flash-0731 · today 1,001 / 10,000 sats
