@@ -247,3 +247,13 @@ test("malformed requests are rejected before anything is paid", async () => {
 	assert.equal((await fetch(`${bridge.base}/files`, { method: "POST" })).status, 404);
 	assert.equal(wallet.paid.length, 0);
 });
+
+test("a seller that redirects is not followed and nothing is paid", async () => {
+	const other = await startSeller();
+	cleanups.push(other.close);
+	const { wallet, bridge } = await setup({ redirectTo: `${other.base}/chat/completions` });
+	const res = await post(bridge.base);
+	assert.equal(res.status, 502);
+	assert.equal(wallet.paid.length, 0);
+	assert.equal(other.seen.challenges, 0, "the other host was never contacted");
+});

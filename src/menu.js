@@ -50,7 +50,11 @@ export function menuToModels(body) {
  */
 export async function fetchJson(url, fetchFn, timeoutMs = 10_000) {
 	try {
-		const res = await fetchFn(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/json" } });
+		const res = await fetchFn(url, {
+			signal: AbortSignal.timeout(timeoutMs),
+			headers: { accept: "application/json" },
+			redirect: "error",
+		});
 		if (!res.ok) {
 			return null;
 		}

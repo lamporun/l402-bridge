@@ -202,6 +202,7 @@ export function createBridge(options) {
 			try {
 				const res = await fetchFn(`${sellerBase}/balance`, {
 					headers: { authorization: `L402 ${token.macaroonB64}:${token.preimageHex}` },
+					redirect: "error",
 					signal: AbortSignal.timeout(10_000),
 				});
 				if (res.ok) {
@@ -273,6 +274,9 @@ export function createBridge(options) {
 							accept: String(req.headers.accept ?? "application/json"),
 						},
 						body: new Uint8Array(body),
+						// An API answer is never a redirect. Following one could
+						// take the request, and a payment, to another host.
+						redirect: "error",
 						signal: controller.signal,
 						routeId: model,
 					}),

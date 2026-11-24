@@ -50,6 +50,7 @@ const sha256 = (hex) => createHash("sha256").update(Buffer.from(hex, "hex")).dig
  *   bundleRequests?: number,
  *   freeModels?: boolean,
  *   menu?: unknown,
+ *   redirectTo?: string,
  * }} [options]
  */
 export async function startSeller(options = {}) {
@@ -99,6 +100,10 @@ export async function startSeller(options = {}) {
 		req.on("data", (c) => chunks.push(c));
 		req.on("end", () => {
 			seen.authorizations.push(String(req.headers.authorization ?? ""));
+			if (options.redirectTo) {
+				res.writeHead(307, { location: options.redirectTo }).end();
+				return;
+			}
 			if (req.method === "GET" && req.url === "/pi402.json") {
 				res.writeHead(200, { "content-type": "application/json" });
 				res.end(JSON.stringify(options.menu ?? { version: 1, models: { "acme/Fast-1": { name: "Fast 1", contextTokens: 128_000 } } }));
