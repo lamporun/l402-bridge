@@ -145,6 +145,14 @@ curl http://127.0.0.1:8402/v1/chat/completions -H 'content-type: application/jso
 - **What is stored:** paid tokens (`tokens.json`) and the payment log (`payments.ndjson`, with each payment's hash and preimage as proof of payment), both readable by you only. Prompts and responses are never logged or stored.
 - Each model has its own bundle, bought on its first request and bought again when the seller reports it used up. A bundle bought once survives restarts.
 
+## Add an approval step with nwc-guard
+
+[nwc-guard](https://github.com/lamporun/nwc-guard) sits between the bridge and your wallet. It refuses payees you haven't approved and payments over your limits, and it asks you on Telegram before paying anything new. Give the bridge the guard's connection instead of your wallet's:
+
+```sh
+NWC_URL="$(npx github:lamporun/nwc-guard url bridge)" npx github:lamporun/l402-bridge
+```
+
 ## Tested on mainnet
 
 On 2026-11-24 the bridge was run against https://lampo.run with real sats, driven by the openai SDK. With [Minibits](https://www.minibits.cash/) as the wallet, a streamed DeepSeek V4 Flash completion bought a 1,000-sat bundle and answered in 13.8 s including the payment, and the next request reused the bundle in 0.8 s. A longer run used a Wavelength wallet behind an NWC service over `wss://relay.getalby.com/v1`:
