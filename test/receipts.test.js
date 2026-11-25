@@ -72,7 +72,9 @@ function seller(seed = 9) {
 			const auth = new Headers(init?.headers).get("authorization");
 			if (auth !== `L402 ${t.stored.macaroonB64}:${t.stored.preimageHex}`) return Response.json({ error: "no" }, { status: 404 });
 			const after = Number(url.searchParams.get("after") || 0);
-			return Response.json({ receipts: receipts.filter((r) => r.seq > after), proofs: {} });
+			// Pages of two, like a seller with a small page size.
+			const rest = receipts.filter((r) => r.seq > after);
+			return Response.json({ receipts: rest.slice(0, 2), proofs: {}, more: rest.length > 2 });
 		}
 		return new Response("not found", { status: 404 });
 	};
@@ -119,9 +121,15 @@ test("each answer's receipt is verified and remembered", async (t) => {
 	assert.match(k.lines.join("\n"), /receipt 1 ✓ 1,000 \+ 300 tokens \(800 cached\) → 587 debited, 9,413 left/);
 	assert.match(k.lines.join("\n"), /receipt 2 ✓/);
 
+	// Several debits since the last check arrive in pages and are all checked.
+	for (let i = 0; i < 5; i++) s.debit({ prompt: 10 + i, cached: 0, completion: 5 });
+	await k.c.afterAnswer("m", s.t.stored, { prompt: 14, cached: 0, completion: 5 });
+	assert.deepEqual(k.c.status().problems, []);
+	assert.equal(k.c.status().verified, 7);
+
 	// The verified history survives a restart.
 	const again = new ReceiptChecker({ sellerOrigin: SELLER, fetchFn: s.fetchFn, file: join(k.dir, "receipts.json"), log: () => {}, retryMs: [0] });
-	assert.equal(again.status().verified, 2);
+	assert.equal(again.status().verified, 7);
 	assert.equal(JSON.parse(readFileSync(join(k.dir, "receipts.json"), "utf8")).issuer, k.c.status().issuer);
 });
 

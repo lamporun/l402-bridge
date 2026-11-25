@@ -212,8 +212,20 @@ export class ReceiptChecker {
 			});
 			if (res.status === 404 && !known) return; // a bundle from before receipts
 			if (!res.ok) continue;
-			const body = await res.json();
+			let body = await res.json();
 			fresh = Array.isArray(body.receipts) ? body.receipts : [];
+			// A long gap comes in pages: follow them.
+			for (let pages = 0; body.more && fresh.length && pages < 1000; pages++) {
+				const next = await this.fetchFn(`${service.receipts}?after=${fresh[fresh.length - 1].seq}`, {
+					headers: { authorization: header },
+					redirect: "error",
+					signal: AbortSignal.timeout(10_000),
+				});
+				if (!next.ok) break;
+				body = await next.json();
+				if (!Array.isArray(body.receipts) || body.receipts.length === 0) break;
+				fresh = fresh.concat(body.receipts);
+			}
 			const matched = !observed || fresh.some((r) => sameUsage(r, observed));
 			if (fresh.length && matched) break;
 		}
