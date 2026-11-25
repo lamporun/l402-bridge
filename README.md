@@ -151,9 +151,14 @@ curl http://127.0.0.1:8402/v1/chat/completions -H 'content-type: application/jso
 When the seller signs [usage receipts](https://github.com/lamporun/l402-receipts) (Lampo does), the bridge checks the receipt of every answer as soon as it ends, in the background:
 
 ```
-→ deepseek-ai/DeepSeek-V4-Flash-0731 200 in 2.1s
-🧾 deepseek-ai/DeepSeek-V4-Flash-0731: receipt 3 ✓ 1,204 + 87 tokens (1,024 cached) → 312 debited, 2,788,960 left
+⚡ paid 1,000 sats · new bundle for deepseek-ai/DeepSeek-V4-Flash-0731 · today 1,000 / 1,100 sats
+→ deepseek-ai/DeepSeek-V4-Flash-0731 200 in 11.5s
+🧾 deepseek-ai/DeepSeek-V4-Flash-0731: receipt 1 ✓ 19 + 80 tokens → 120 debited, 2,509,290 left
+→ deepseek-ai/DeepSeek-V4-Flash-0731 200 in 1.5s
+🧾 deepseek-ai/DeepSeek-V4-Flash-0731: receipt 2 ✓ 16 + 99 tokens → 143 debited, 2,509,147 left
 ```
+
+(From a live run on lampo.run with a Minibits wallet, 25 November 2026. Completion tokens are debited at the output rate, twice the input rate for this model, hence 120 bundle tokens for 99 used.)
 
 It checks the seller's signature, that no receipt is missing from the bundle's history, that each balance follows from the one before, that each debit is exactly what the usage costs at the stated rates, and that a receipt reports the same usage as the answer itself. Anything that doesn't add up is logged with ⚠ and listed in `/l402/status`. Verified receipts are kept in `receipts.json`, so a receipt the seller changes later is caught too. Sellers without receipts are left alone.
 
