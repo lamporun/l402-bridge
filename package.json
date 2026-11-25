@@ -41,8 +41,8 @@
 		"light-bolt11-decoder": "3.2.0"
 	},
 	"devDependencies": {
-		"@noble/curves": "^2.0.1",
-		"@noble/hashes": "^2.0.1",
+		"@noble/curves": "2.0.1",
+		"@noble/hashes": "2.0.1",
 		"@types/node": "26.6.6",
 		"bolt11": "1.4.2",
 		"nostr-tools": "2.26.1",
