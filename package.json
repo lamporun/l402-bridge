@@ -37,7 +37,7 @@
 	"dependencies": {
 		"@getalby/sdk": "9.0.0",
 		"@lightninglabs/aperture-client": "0.0.2",
-		"l402-receipts": "github:lamporun/l402-receipts#b63c180cd50ef5c46e67630ad2514f50cfdd17a2",
+		"l402-receipts": "github:lamporun/l402-receipts#14c1527f8f616ace7384ba46170172f3df3e7365",
 		"light-bolt11-decoder": "3.2.0"
 	},
 	"devDependencies": {
