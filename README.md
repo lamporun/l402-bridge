@@ -132,9 +132,10 @@ curl http://127.0.0.1:8402/v1/chat/completions -H 'content-type: application/jso
 | `--access-key <key>` | | Require this as the tool's API key. Also `L402_BRIDGE_ACCESS_KEY`. |
 | `--allow-origin <origin>` | | Let a browser app at this origin call the bridge. Repeatable. |
 | `--data-dir <dir>` | `~/.l402-bridge` | Where paid tokens and the payment log are kept. |
+| `--no-receipts` | | Do not check the seller's signed receipts. |
 | `--quiet` | | Log payments only. |
 
-`GET /l402/status` shows the wallet balance (if the connection may read it), the limits and today's spend, the bundles you hold with what is left of each (where the seller reports it), and the last payments.
+`GET /l402/status` shows the wallet balance (if the connection may read it), the limits and today's spend, the bundles you hold with what is left of each (where the seller reports it), the last payments, and the receipts checked so far with any problem found.
 
 ## How it handles your money
 
@@ -144,6 +145,17 @@ curl http://127.0.0.1:8402/v1/chat/completions -H 'content-type: application/jso
 - **Your tool's API key, cookies and other headers never reach the seller.** The bridge forwards only the request body, `Content-Type` and `Accept`.
 - **What is stored:** paid tokens (`tokens.json`) and the payment log (`payments.ndjson`, with each payment's hash and preimage as proof of payment), both readable by you only. Prompts and responses are never logged or stored.
 - Each model has its own bundle, bought on its first request and bought again when the seller reports it used up. A bundle bought once survives restarts.
+
+## Every debit checked against a signed receipt
+
+When the seller signs [usage receipts](https://github.com/lamporun/l402-receipts) (Lampo does), the bridge checks the receipt of every answer as soon as it ends, in the background:
+
+```
+→ deepseek-ai/DeepSeek-V4-Flash-0731 200 in 2.1s
+🧾 deepseek-ai/DeepSeek-V4-Flash-0731: receipt 3 ✓ 1,204 + 87 tokens (1,024 cached) → 312 debited, 2,788,960 left
+```
+
+It checks the seller's signature, that no receipt is missing from the bundle's history, that each balance follows from the one before, that each debit is exactly what the usage costs at the stated rates, and that a receipt reports the same usage as the answer itself. Anything that doesn't add up is logged with ⚠ and listed in `/l402/status`. Verified receipts are kept in `receipts.json`, so a receipt the seller changes later is caught too. Sellers without receipts are left alone.
 
 ## Add an approval step with nwc-guard
 

@@ -11,6 +11,7 @@ import { parseArgs } from "node:util";
 import { NWCClient } from "@getalby/sdk/nwc";
 import { NwcPayer } from "../src/payer.js";
 import { SpendGuard } from "../src/policy.js";
+import { ReceiptChecker } from "../src/receipts.js";
 import { createBridge } from "../src/server.js";
 import { ensurePrivateDir, FileTokenStore, Ledger } from "../src/store.js";
 import { formatSat } from "../src/util.js";
@@ -45,6 +46,8 @@ Options:
                                  (repeatable; browsers are refused by default)
   --data-dir <dir>               where paid tokens and the payment log live
                                  (default ~/.l402-bridge)
+  --no-receipts                  do not check the seller's signed receipts
+                                 (checked by default when the seller signs them)
   --quiet                        log payments only
   -h, --help                     show this help
   -v, --version                  show the version
@@ -106,6 +109,7 @@ async function main() {
 				"allow-origin": { type: "string", multiple: true },
 				"wallet-file": { type: "string" },
 				"data-dir": { type: "string" },
+				"no-receipts": { type: "boolean" },
 				quiet: { type: "boolean" },
 				help: { type: "boolean", short: "h" },
 				version: { type: "boolean", short: "v" },
@@ -240,6 +244,10 @@ async function main() {
 		},
 	});
 
+	const receipts = args["no-receipts"]
+		? undefined
+		: new ReceiptChecker({ sellerOrigin: seller.origin, fetchFn: fetch, file: join(dataDir, "receipts.json"), log: say });
+
 	const server = createBridge({
 		sellerBase,
 		loopbackOnly,
@@ -251,6 +259,7 @@ async function main() {
 		ledger,
 		walletInfo,
 		log: chatter,
+		receipts,
 	});
 
 	await new Promise((resolve, reject) => {

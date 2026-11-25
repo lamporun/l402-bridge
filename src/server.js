@@ -25,6 +25,7 @@ import { PolicyError, WalletError } from "./errors.js";
 import { loadModels } from "./menu.js";
 import { paymentContext } from "./payer.js";
 import { sellerPolicy } from "./policy.js";
+import { usageTap } from "./receipts.js";
 
 // PAID_PATHS are the OpenAI routes forwarded through the paying fetch.
 const PAID_PATHS = new Set(["chat/completions", "completions", "embeddings", "responses"]);
@@ -51,6 +52,7 @@ const MODELS_TTL_MS = 5 * 60 * 1000;
  *   walletInfo?: () => Promise<Record<string, unknown> | null>,
  *   fetchFn?: typeof fetch,
  *   log?: (line: string) => void,
+ *   receipts?: import("./receipts.js").ReceiptChecker,
  * }} BridgeOptions
  */
 
@@ -322,13 +324,22 @@ export function createBridge(options) {
 			res.end();
 			return;
 		}
+		const usage = usageTap();
+		let complete = false;
 		try {
-			await pipeline(Readable.fromWeb(/** @type {import("node:stream/web").ReadableStream} */ (upstream.body)), res);
+			await pipeline(Readable.fromWeb(/** @type {import("node:stream/web").ReadableStream} */ (upstream.body)), usage.tap, res);
+			complete = true;
 		} catch {
 			// The tool went away, or the seller's stream broke midway.
 			res.destroy();
 		}
 		log(`→ ${model} ${upstream.status} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+
+		// A debited answer has a receipt; check it in the background.
+		const token = options.tokenStore.get(key);
+		if (options.receipts && token && upstream.status >= 200 && upstream.status < 300) {
+			void options.receipts.afterAnswer(model, token, complete ? usage.usage() : null);
+		}
 	}
 
 	/**
@@ -398,6 +409,7 @@ export function createBridge(options) {
 				},
 				bundles: await bundles(),
 				recent_payments: options.ledger.recent(10),
+				receipts: options.receipts?.status() ?? null,
 			});
 			return;
 		}
