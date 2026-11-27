@@ -53,7 +53,7 @@ The model ids below are lampo.run's. `curl http://127.0.0.1:8402/v1/models` list
 The simplest way is the [OpenClaw plugin](https://github.com/lamporun/openclaw-l402), which runs the bridge inside the Gateway and lists the seller's models for you:
 
 ```sh
-openclaw plugins install git:github.com/lamporun/openclaw-l402@v0.1.0
+openclaw plugins install @lamporun/openclaw-l402 --accept-capabilities
 ```
 
 To run the bridge yourself instead, add a custom provider to `openclaw.json` and make one of its models the default:
