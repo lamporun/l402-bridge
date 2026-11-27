@@ -5,15 +5,14 @@
 // OpenAI-compatible tool at http://127.0.0.1:8402/v1.
 
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { NWCClient } from "@getalby/sdk/nwc";
-import { NwcPayer } from "../src/payer.js";
-import { SpendGuard } from "../src/policy.js";
-import { ReceiptChecker } from "../src/receipts.js";
-import { createBridge } from "../src/server.js";
-import { ensurePrivateDir, FileTokenStore, Ledger } from "../src/store.js";
+import {
+	DEFAULT_MAX_SATS_PER_DAY,
+	DEFAULT_MAX_SATS_PER_PAYMENT,
+	DEFAULT_PORT,
+	DEFAULT_SELLER,
+	startBridge,
+} from "../src/start.js";
 import { formatSat } from "../src/util.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -57,7 +56,10 @@ Then point your tool at:
   API key   any value (or your --access-key)
 `;
 
-/** @param {string} message */
+/**
+ * @param {string} message
+ * @returns {never}
+ */
 function fail(message) {
 	console.error(`l402-bridge: ${message}`);
 	process.exit(1);
@@ -78,21 +80,6 @@ function positive(raw, fallback, name) {
 		fail(`${name} must be a positive whole number, got ${JSON.stringify(raw)}`);
 	}
 	return Number(raw);
-}
-
-/**
- * withTimeout bounds a wallet call made at startup.
- *
- * @template T
- * @param {Promise<T>} promise
- * @param {number} ms
- * @returns {Promise<T>}
- */
-function withTimeout(promise, ms) {
-	return Promise.race([
-		promise,
-		new Promise((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000}s`)), ms).unref()),
-	]);
 }
 
 async function main() {
@@ -131,42 +118,26 @@ async function main() {
 	}
 
 	const env = process.env;
-	const sellerBase = (args.seller ?? env.L402_BRIDGE_SELLER ?? "https://lampo.run/v1").replace(/\/+$/, "");
-	let seller;
-	try {
-		seller = new URL(sellerBase);
-	} catch {
-		fail(`--seller is not a URL: ${sellerBase}`);
-		return;
-	}
-	const localSeller = ["localhost", "127.0.0.1", "[::1]"].includes(seller.hostname);
-	if (seller.protocol !== "https:" && !(seller.protocol === "http:" && localSeller)) {
-		fail("--seller must use https (plain http is allowed only for a seller on this machine)");
-	}
-
+	const sellerBase = (args.seller ?? env.L402_BRIDGE_SELLER ?? DEFAULT_SELLER).replace(/\/+$/, "");
 	const maxSatsPerPayment = positive(
 		args["max-sats-per-payment"] ?? env.L402_BRIDGE_MAX_SATS_PER_PAYMENT,
-		1_000,
+		DEFAULT_MAX_SATS_PER_PAYMENT,
 		"--max-sats-per-payment",
 	);
-	const maxSatsPerDay = positive(args["max-sats-per-day"] ?? env.L402_BRIDGE_MAX_SATS_PER_DAY, 10_000, "--max-sats-per-day");
+	const maxSatsPerDay = positive(
+		args["max-sats-per-day"] ?? env.L402_BRIDGE_MAX_SATS_PER_DAY,
+		DEFAULT_MAX_SATS_PER_DAY,
+		"--max-sats-per-day",
+	);
 	if (maxSatsPerDay < maxSatsPerPayment) {
 		fail("--max-sats-per-day must be at least --max-sats-per-payment");
 	}
-	const port = positive(args.port ?? env.L402_BRIDGE_PORT, 8402, "--port");
+	const port = positive(args.port ?? env.L402_BRIDGE_PORT, DEFAULT_PORT, "--port");
 	if (port > 65_535) {
 		fail("--port must be at most 65535");
 	}
 	const host = args.host ?? env.L402_BRIDGE_HOST ?? "127.0.0.1";
-	const loopbackOnly = ["127.0.0.1", "localhost", "::1"].includes(host);
 	const accessKey = args["access-key"] ?? env.L402_BRIDGE_ACCESS_KEY;
-	if (!loopbackOnly && !accessKey) {
-		fail(`listening on ${host} lets other machines spend your sats; set --access-key too`);
-	}
-	if (accessKey !== undefined && accessKey.length < 16) {
-		fail("--access-key must be at least 16 characters");
-	}
-	const dataDir = args["data-dir"] ?? env.L402_BRIDGE_DATA_DIR ?? join(homedir(), ".l402-bridge");
 
 	let walletUrl = env.NWC_URL;
 	if (args["wallet-file"]) {
@@ -180,111 +151,36 @@ async function main() {
 		fail("no wallet: set NWC_URL to your wallet's Nostr Wallet Connect string, or use --wallet-file\n\nRun with --help for details.");
 		return;
 	}
-	/** @type {NWCClient} */
-	let client;
-	try {
-		NWCClient.parseWalletConnectUrl(walletUrl, true);
-		client = new NWCClient({ nostrWalletConnectUrl: walletUrl });
-	} catch {
-		fail("NWC_URL is not a valid nostr+walletconnect:// connection string");
-		return;
-	}
 
 	const say = (/** @type {string} */ line) => console.log(line);
-	const chatter = args.quiet ? () => {} : say;
-
-	// Check the wallet before listening: a bridge that cannot pay should say
-	// so now, not on the first request.
-	let walletLabel = "NWC wallet";
-	try {
-		const info = await withTimeout(client.getInfo(), 20_000);
-		if (Array.isArray(info.methods) && !info.methods.includes("pay_invoice")) {
-			fail("this wallet connection cannot pay invoices; create one with the pay_invoice permission");
-		}
-		if (info.network && !["mainnet", "bitcoin"].includes(String(info.network).toLowerCase())) {
-			say(`  note: the wallet reports network ${info.network}; the seller must be on the same network`);
-		}
-		walletLabel = info.alias ? `${info.alias} (NWC)` : walletLabel;
-	} catch (err) {
-		say(`  note: the wallet did not answer get_info (${err instanceof Error ? err.message : String(err)}); continuing`);
-	}
-
-	/** @type {{ at: number, value: Record<string, unknown> | null } | null} */
-	let walletCache = null;
-	async function walletInfo() {
-		if (walletCache && Date.now() - walletCache.at < 30_000) {
-			return walletCache.value;
-		}
-		/** @type {Record<string, unknown>} */
-		const value = { name: walletLabel };
-		try {
-			const { balance } = await withTimeout(client.getBalance(), 10_000);
-			value.balance_sats = Math.floor(balance / 1000);
-		} catch {
-			// The connection may not be allowed to read the balance.
-		}
-		walletCache = { at: Date.now(), value };
-		return value;
-	}
-
-	ensurePrivateDir(dataDir);
-	const ledger = new Ledger(join(dataDir, "payments.ndjson"));
-	const guard = new SpendGuard({ maxSatsPerPayment, maxSatsPerDay, ledger });
-	const tokenStore = new FileTokenStore(join(dataDir, "tokens.json"));
-	const payer = new NwcPayer({
-		client,
-		guard,
-		ledger,
-		onPaid: (payment) => {
-			const fee = payment.feesSat ? ` + ${formatSat(payment.feesSat)} fee` : "";
-			say(
-				`⚡ paid ${formatSat(payment.amountSat)} sats${fee} · new bundle for ${payment.model} · ` +
-					`today ${formatSat(guard.spentToday())} / ${formatSat(maxSatsPerDay)} sats`,
-			);
-		},
-	});
-
-	const receipts = args["no-receipts"]
-		? undefined
-		: new ReceiptChecker({ sellerOrigin: seller.origin, fetchFn: fetch, file: join(dataDir, "receipts.json"), log: say });
-
-	const server = createBridge({
+	const bridge = await startBridge({
+		walletUrl,
 		sellerBase,
-		loopbackOnly,
+		maxSatsPerPayment,
+		maxSatsPerDay,
+		port,
+		host,
 		accessKey,
 		allowedOrigins: args["allow-origin"] ?? [],
-		payer,
-		guard,
-		tokenStore,
-		ledger,
-		walletInfo,
-		log: chatter,
-		receipts,
-	});
+		dataDir: args["data-dir"] ?? env.L402_BRIDGE_DATA_DIR,
+		receipts: !args["no-receipts"],
+		log: say,
+		chatter: args.quiet ? () => {} : say,
+	}).catch((err) => fail(err instanceof Error ? err.message : String(err)));
 
-	await new Promise((resolve, reject) => {
-		server.once("error", reject);
-		server.listen(port, host, () => resolve(undefined));
-	}).catch((err) => fail(`cannot listen on ${host}:${port}: ${err.message}`));
-
-	const wallet = await walletInfo();
+	const wallet = await bridge.walletInfo();
 	const balance = typeof wallet?.balance_sats === "number" ? `, ${formatSat(wallet.balance_sats)} sats` : "";
-	const shownHost = host.includes(":") ? `[${host}]` : host;
 	say(`⚡ l402-bridge ${VERSION} is ready
 
-  base URL   http://${shownHost}:${port}/v1
-  API key    ${accessKey ? "your --access-key" : "any value"}
-  seller     ${sellerBase}
-  wallet     ${walletLabel}${balance}
-  limits     ${formatSat(maxSatsPerPayment)} sats per payment, ${formatSat(maxSatsPerDay)} sats per day (spent today: ${formatSat(guard.spentToday())})
-  status     http://${shownHost}:${port}/l402/status
+  base URL   ${bridge.url}
+  API key    ${bridge.accessKey ? "your --access-key" : "any value"}
+  seller     ${bridge.sellerBase}
+  wallet     ${bridge.walletLabel}${balance}
+  limits     ${formatSat(bridge.maxSatsPerPayment)} sats per payment, ${formatSat(bridge.maxSatsPerDay)} sats per day (spent today: ${formatSat(bridge.guard.spentToday())})
+  status     ${bridge.statusUrl}
 `);
 
-	const stop = () => {
-		server.close();
-		client.close();
-		process.exit(0);
-	};
+	const stop = () => bridge.close().finally(() => process.exit(0));
 	process.on("SIGINT", stop);
 	process.on("SIGTERM", stop);
 }

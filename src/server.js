@@ -53,6 +53,7 @@ const MODELS_TTL_MS = 5 * 60 * 1000;
  *   fetchFn?: typeof fetch,
  *   log?: (line: string) => void,
  *   receipts?: import("./receipts.js").ReceiptChecker,
+ *   paymentErrorStatus?: number,
  * }} BridgeOptions
  */
 
@@ -127,6 +128,10 @@ export function createBridge(options) {
 	const sellerOrigin = new URL(sellerBase).origin;
 	const fetchFn = options.fetchFn ?? fetch;
 	const log = options.log ?? (() => {});
+	// Payment refusals and failures answer 402 or 502 by default. A host that
+	// replaces those statuses with its own generic text (OpenClaw does) can ask
+	// for another status, so the user reads why nothing was paid.
+	const paymentStatus = (/** @type {number} */ status) => options.paymentErrorStatus ?? status;
 	const allowedOrigins = new Set(options.allowedOrigins ?? []);
 	/** @param {number | undefined} port */
 	const loopbackHosts = (port) => [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`];
@@ -291,10 +296,10 @@ export function createBridge(options) {
 			}
 			if (err instanceof PolicyError) {
 				log(`✋ ${model}: ${err.message}`);
-				sendError(res, 402, "l402_bridge_limit", err.message);
+				sendError(res, paymentStatus(402), "l402_bridge_limit", err.message);
 			} else if (err instanceof WalletError) {
 				log(`✗ ${model}: wallet: ${err.message}`);
-				sendError(res, 502, "l402_bridge_wallet", `payment not made: ${err.message}`);
+				sendError(res, paymentStatus(502), "l402_bridge_wallet", `payment not made: ${err.message}`);
 			} else {
 				const message = err instanceof Error ? err.message : String(err);
 				log(`✗ ${model}: ${message}`);
@@ -307,7 +312,7 @@ export function createBridge(options) {
 			// The paying fetch hands back a 402 it could not answer: no
 			// L402 offer, or a seller that refused the paid credential.
 			await upstream.body?.cancel();
-			sendError(res, 402, "l402_bridge_unpaid", "the seller asked for a payment the bridge could not make");
+			sendError(res, paymentStatus(402), "l402_bridge_unpaid", "the seller asked for a payment the bridge could not make");
 			return;
 		}
 

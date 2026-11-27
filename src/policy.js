@@ -12,6 +12,19 @@ import { formatSat, localDayStart } from "./util.js";
  * @typedef {import("./store.js").Ledger} Ledger
  */
 
+/**
+ * LimitHints tell the user how to raise a limit, in the words of whatever
+ * runs the bridge (command-line flags by default).
+ *
+ * @typedef {{ perPayment: (amountSat: number) => string, perDay: () => string }} LimitHints
+ */
+
+/** @type {LimitHints} */
+export const CLI_HINTS = {
+	perPayment: (amountSat) => `Restart l402-bridge with --max-sats-per-payment ${amountSat} to allow it, or pick a cheaper model.`,
+	perDay: () => "Raise it with --max-sats-per-day.",
+};
+
 export class SpendGuard {
 	/**
 	 * @param {{
@@ -19,9 +32,11 @@ export class SpendGuard {
 	 *   maxSatsPerDay: number,
 	 *   ledger: Ledger,
 	 *   now?: () => number,
+	 *   hints?: LimitHints,
 	 * }} options
 	 */
 	constructor(options) {
+		this.hints = options.hints ?? CLI_HINTS;
 		this.maxSatsPerPayment = options.maxSatsPerPayment;
 		this.maxSatsPerDay = options.maxSatsPerDay;
 		this.ledger = options.ledger;
@@ -47,7 +62,7 @@ export class SpendGuard {
 		if (amountSat > this.maxSatsPerPayment) {
 			throw new PolicyError(
 				`this bundle costs ${formatSat(amountSat)} sats, above the limit of ${formatSat(this.maxSatsPerPayment)} sats per payment. ` +
-					`Restart l402-bridge with --max-sats-per-payment ${amountSat} to allow it, or pick a cheaper model.`,
+					this.hints.perPayment(amountSat),
 				"over_payment_limit",
 			);
 		}
@@ -55,7 +70,7 @@ export class SpendGuard {
 		if (committed + amountSat > this.maxSatsPerDay) {
 			throw new PolicyError(
 				`paying ${formatSat(amountSat)} sats would pass today's limit of ${formatSat(this.maxSatsPerDay)} sats ` +
-					`(${formatSat(committed)} already spent or in flight). Raise it with --max-sats-per-day.`,
+					`(${formatSat(committed)} already spent or in flight). ${this.hints.perDay()}`,
 				"over_daily_limit",
 			);
 		}

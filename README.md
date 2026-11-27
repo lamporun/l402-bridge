@@ -50,7 +50,13 @@ The model ids below are lampo.run's. `curl http://127.0.0.1:8402/v1/models` list
 
 ### OpenClaw
 
-Add a custom provider to `openclaw.json` and make one of its models the default:
+The simplest way is the [OpenClaw plugin](https://github.com/lamporun/openclaw-l402), which runs the bridge inside the Gateway and lists the seller's models for you:
+
+```sh
+openclaw plugins install git:github.com/lamporun/openclaw-l402@v0.1.0
+```
+
+To run the bridge yourself instead, add a custom provider to `openclaw.json` and make one of its models the default:
 
 ```json5
 {
@@ -118,6 +124,26 @@ print(reply.choices[0].message.content)
 curl http://127.0.0.1:8402/v1/chat/completions -H 'content-type: application/json' \
   -d '{"model":"deepseek-ai/DeepSeek-V4-Flash-0731","messages":[{"role":"user","content":"Hello"}]}'
 ```
+
+### Inside your own program
+
+The bridge is also a library. `startBridge` takes the same settings as the command line and returns once it is listening:
+
+```js
+import { startBridge } from "l402-bridge";
+
+const bridge = await startBridge({
+  walletUrl: process.env.NWC_URL,
+  maxSatsPerPayment: 1000,
+  maxSatsPerDay: 10000,
+  port: 0, // any free port
+});
+console.log(bridge.url); // http://127.0.0.1:<port>/v1
+// ... point your client at bridge.url ...
+await bridge.close();
+```
+
+It throws a `ConfigError` for a setting it refuses (no wallet, a seller without https, a daily limit below the per-payment limit, a non-loopback address without an access key).
 
 ## Options
 
