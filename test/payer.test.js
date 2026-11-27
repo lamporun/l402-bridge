@@ -131,3 +131,32 @@ test("a wallet's own refusal reason reaches the user", async () => {
 		(err) => err instanceof WalletError && /limit was reached \(nwc-guard: 3000 sats is above the limit/.test(err.message),
 	);
 });
+
+test("a wallet gets 150 s to answer a payment before the bridge looks it up", async () => {
+	const ledger = new Ledger(join(mkdtempSync(join(tmpdir(), "l402-payer-")), "payments.ndjson"));
+	const guard = new SpendGuard({ maxSatsPerPayment: 1_000, maxSatsPerDay: 10_000, ledger });
+	const preimage = "22".repeat(32);
+	const hash = createHash("sha256").update(Buffer.from(preimage, "hex")).digest("hex");
+	/** @type {any[]} */
+	const calls = [];
+	const client = {
+		payInvoice: async () => {
+			throw new Error("payInvoice should not be used when executeNip47Request exists");
+		},
+		lookupInvoice: async () => ({}),
+		/** @param {string} method @param {any} params @param {(r: any) => boolean} validate @param {any} timeouts */
+		executeNip47Request: async (method, params, validate, timeouts) => {
+			calls.push({ method, params, timeouts, valid: validate({ preimage }) });
+			return { preimage, fees_paid: 0 };
+		},
+	};
+	const payer = new NwcPayer({ client, guard, ledger });
+	const invoice = invoiceFor(1_000, hash);
+	await payer.payInvoice({ invoice, amountSat: 1_000, challengeId: "c" });
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0].method, "pay_invoice");
+	assert.deepEqual(calls[0].params, { invoice });
+	assert.equal(calls[0].timeouts.replyTimeout, 150_000);
+	assert.equal(calls[0].valid, true);
+	assert.equal(ledger.payments.length, 1);
+});

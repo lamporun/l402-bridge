@@ -111,6 +111,7 @@ export class NwcPayer {
 	 *   guard: import("./policy.js").SpendGuard,
 	 *   ledger: import("./store.js").Ledger,
 	 *   onPaid?: (payment: import("./store.js").Payment) => void,
+	 *   replyTimeoutMs?: number,
 	 *   settleTimeoutMs?: number,
 	 *   pollMs?: number,
 	 *   pauseMs?: number,
@@ -122,6 +123,10 @@ export class NwcPayer {
 		this.guard = options.guard;
 		this.ledger = options.ledger;
 		this.onPaid = options.onPaid;
+		// Some wallets take more than a minute to route a payment (Coinos took
+		// 21 to 60+ seconds in our tests), so wait well past the NWC client's
+		// default 60 s before falling back to lookups.
+		this.replyTimeoutMs = options.replyTimeoutMs ?? 150_000;
 		this.settleTimeoutMs = options.settleTimeoutMs ?? 90_000;
 		this.pollMs = options.pollMs ?? 3_000;
 		this.pauseMs = options.pauseMs ?? 120_000;
@@ -188,6 +193,15 @@ export class NwcPayer {
 	 */
 	async pay(invoice, paymentHash) {
 		try {
+			// NWCClient.payInvoice has no timeout option; its request method
+			// takes one. The SDK version is pinned, and other clients fall back
+			// to payInvoice.
+			const client = /** @type {any} */ (this.client);
+			if (typeof client.executeNip47Request === "function") {
+				return await client.executeNip47Request("pay_invoice", { invoice }, (/** @type {any} */ result) => !!result?.preimage, {
+					replyTimeout: this.replyTimeoutMs,
+				});
+			}
 			return await this.client.payInvoice({ invoice });
 		} catch (err) {
 			if (isDefiniteFailure(err)) {
