@@ -11,8 +11,14 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { Transform } from "node:stream";
 import { checkChain, parseCredential } from "l402-receipts";
+import { readJson } from "./util.js";
 
 /** @typedef {import("l402-receipts").Receipt} Receipt */
+
+// Bounds on what one catch-up reads from the seller: a page of receipts, and
+// receipts in total. A seller cannot make the bridge buffer more than this.
+const MAX_PAGE_BYTES = 8 * 1024 * 1024;
+const MAX_RECEIPTS = 100_000;
 
 /**
  * @typedef {object} ObservedUsage
@@ -144,7 +150,7 @@ export class ReceiptChecker {
 					signal: AbortSignal.timeout(10_000),
 				});
 				if (!res.ok) return null;
-				const wk = await res.json();
+				const wk = await readJson(res, 64 * 1024);
 				const receipts = new URL(String(wk.receipts));
 				if (receipts.origin !== this.sellerOrigin || !/^[0-9a-f]{64}$/.test(String(wk.issuer))) return null;
 				if (this.state.issuer && this.state.issuer !== wk.issuer) {
@@ -212,7 +218,7 @@ export class ReceiptChecker {
 			});
 			if (res.status === 404 && !known) return; // a bundle from before receipts
 			if (!res.ok) continue;
-			let body = await res.json();
+			let body = await readJson(res, MAX_PAGE_BYTES);
 			fresh = Array.isArray(body.receipts) ? body.receipts : [];
 			// A long gap comes in pages: follow them.
 			for (let pages = 0; body.more && fresh.length && pages < 1000; pages++) {
@@ -222,9 +228,10 @@ export class ReceiptChecker {
 					signal: AbortSignal.timeout(10_000),
 				});
 				if (!next.ok) break;
-				body = await next.json();
+				body = await readJson(next, MAX_PAGE_BYTES);
 				if (!Array.isArray(body.receipts) || body.receipts.length === 0) break;
 				fresh = fresh.concat(body.receipts);
+				if (fresh.length > MAX_RECEIPTS) break;
 			}
 			const matched = !observed || fresh.some((r) => sameUsage(r, observed));
 			if (fresh.length && matched) break;

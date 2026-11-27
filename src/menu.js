@@ -5,7 +5,9 @@
 // seller's rate file (<origin>/pi402.json, the file pi-402 reads), so a tool
 // can list models without paying for the list.
 
-const MAX_MENU_BYTES = 256 * 1024;
+import { readBounded } from "./util.js";
+
+const MAX_MENU_BYTES = 1024 * 1024;
 const WIRE_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 
 /**
@@ -58,11 +60,8 @@ export async function fetchJson(url, fetchFn, timeoutMs = 10_000) {
 		if (!res.ok) {
 			return null;
 		}
-		const text = await res.text();
-		if (text.length > MAX_MENU_BYTES * 4) {
-			return null;
-		}
-		return JSON.parse(text);
+		const text = await readBounded(res, MAX_MENU_BYTES);
+		return text === null ? null : JSON.parse(text);
 	} catch {
 		return null;
 	}

@@ -26,6 +26,7 @@ import { loadModels } from "./menu.js";
 import { paymentContext } from "./payer.js";
 import { sellerPolicy } from "./policy.js";
 import { usageTap } from "./receipts.js";
+import { readJson } from "./util.js";
 
 // PAID_PATHS are the OpenAI routes forwarded through the paying fetch.
 const PAID_PATHS = new Set(["chat/completions", "completions", "embeddings", "responses"]);
@@ -213,7 +214,7 @@ export function createBridge(options) {
 					signal: AbortSignal.timeout(10_000),
 				});
 				if (res.ok) {
-					const body = await res.json();
+					const body = await readJson(res, 64 * 1024);
 					for (const field of ["remaining_tokens", "bundle_tokens", "price_sats", "activated"]) {
 						if (field in body) {
 							entry[field] = body[field];

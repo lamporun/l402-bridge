@@ -13,4 +13,5 @@ export {
 } from "./start.js";
 export { PolicyError, WalletError } from "./errors.js";
 export { CLI_HINTS } from "./policy.js";
+export { readBounded, readJson } from "./util.js";
 export { loadModels, menuToModels } from "./menu.js";

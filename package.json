@@ -1,6 +1,6 @@
 {
 	"name": "l402-bridge",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"description": "Let any OpenAI-compatible tool pay for its own inference in sats: a local proxy that answers L402 challenges from any Nostr Wallet Connect wallet.",
 	"type": "module",
 	"exports": {
